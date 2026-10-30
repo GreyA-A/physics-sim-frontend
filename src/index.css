@@ -1,0 +1,4 @@
+/* Три директиви Tailwind: базові стилі, компоненти, утиліти */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
