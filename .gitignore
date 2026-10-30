@@ -1,0 +1,27 @@
+# Залежності
+node_modules/
+
+# Артефакти збірки та тестів
+dist/
+coverage/
+*.tsbuildinfo
+
+# Змінні середовища
+.env
+.env.*
+!.env.example
+
+# Логи
+*.log
+npm-debug.log*
+
+# Кеш інструментів
+.vite/
+.eslintcache
+
+# Редактори та ОС
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
