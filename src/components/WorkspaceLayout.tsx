@@ -30,6 +30,19 @@ export interface WorkspaceLayoutProps {
   canvasSlot?: ReactNode;
   /** Слот під телеметрію (Issue #8). */
   telemetrySlot?: ReactNode;
+  /** Кнопка "Старт" / "Продовжити". */
+  onStartOrResume?: () => void;
+  onPause?: () => void;
+  onReset?: () => void;
+  /**
+   * Прапорці доступності кнопок. За замовчуванням false, тому без цих пропсів
+   * усі кнопки неактивні (зворотна сумісність із попередніми тестами).
+   */
+  canStart?: boolean;
+  canPause?: boolean;
+  canReset?: boolean;
+  /** Напис першої кнопки: "Старт" або "Продовжити". */
+  startLabel?: string;
 }
 
 // Стилі бейджа статусу за станом автомата
@@ -48,6 +61,13 @@ export function WorkspaceLayout({
   renderSidebarTab,
   canvasSlot,
   telemetrySlot,
+  onStartOrResume,
+  onPause,
+  onReset,
+  canStart = false,
+  canPause = false,
+  canReset = false,
+  startLabel = 'Старт',
 }: WorkspaceLayoutProps) {
   // Стан згортання бічної панелі; діє лише на мобільних (на md+ панель завжди видима)
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -80,7 +100,7 @@ export function WorkspaceLayout({
 
       {/*
         Адаптивна сітка:
-        - мобільні: 1 колонка (flex-col порядок: сайдбар, canvas, телеметрія);
+        - мобільні: 1 колонка;
         - md: 2 колонки (сайдбар + canvas), телеметрія на всю ширину нижче;
         - xl: 3 колонки (сайдбар | canvas | телеметрія).
       */}
@@ -116,23 +136,29 @@ export function WorkspaceLayout({
           <Card
             title="Полотно симуляції"
             headerAction={
-              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                <Button variant="primary" ariaLabel="Старт" disabled>
+              // flex-wrap: кнопки переносяться на вузьких екранах (360 px)
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  ariaLabel={startLabel}
+                  disabled={!canStart}
+                  onClick={onStartOrResume}
+                >
                   <Play className="h-4 w-4" aria-hidden="true" />
-                  <span>Старт</span>
+                  <span>{startLabel}</span>
                 </Button>
-                <Button ariaLabel="Пауза" disabled>
+                <Button ariaLabel="Пауза" disabled={!canPause} onClick={onPause}>
                   <Pause className="h-4 w-4" aria-hidden="true" />
                   <span>Пауза</span>
                 </Button>
-                <Button ariaLabel="Скидання" disabled>
+                <Button ariaLabel="Скидання" disabled={!canReset} onClick={onReset}>
                   <RotateCcw className="h-4 w-4" aria-hidden="true" />
                   <span>Скидання</span>
                 </Button>
               </div>
             }
           >
-            {/* Тернарний оператор: або реальний canvas, або плейсхолдер сітки */}
+            {/* Тернарний оператор: або реальний вміст, або плейсхолдер сітки */}
             {canvasSlot ? (
               canvasSlot
             ) : (
@@ -151,10 +177,7 @@ export function WorkspaceLayout({
         </main>
 
         {/* ---------- Зона 4: телеметрія ---------- */}
-        <section
-          data-testid="workspace-telemetry"
-          className="md:col-span-2 xl:col-span-1"
-        >
+        <section data-testid="workspace-telemetry" className="md:col-span-2 xl:col-span-1">
           <Card title="Телеметрія" subtitle="Час, FPS, енергія">
             {telemetrySlot ?? (
               <dl className="grid grid-cols-3 gap-2 text-sm xl:grid-cols-1">
