@@ -1,24 +1,32 @@
 import { useState } from 'react';
-import type { SimulationStatus, PresetId } from './types/simulation';
+import type { SimulationStatus, PresetId, ResearcherProfile } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
 import { Card } from './components/Card';
+import { HeaderSessionBar } from './components/HeaderSessionBar';
+import { QuickStartAuth } from './components/QuickStartAuth';
 import { WorkspaceLayout } from './components/WorkspaceLayout';
 import type { SidebarTabId } from './components/WorkspaceLayout';
+import { SessionProvider, useSession } from './context/SessionContext';
 
 // Початковий стан контролера; у Issue #4 перейде під керування useReducer
 const INITIAL_STATUS: SimulationStatus = 'IDLE';
 
-function App() {
+/**
+ * Робоча область для авторизованого дослідника.
+ * Окремий компонент: при виході він розмонтовується, і локальний стан
+ * (обраний пресет) не «просочується» до наступного користувача.
+ */
+function WorkspaceScreen() {
   const status: SimulationStatus = INITIAL_STATUS;
 
-  // Яскевич В. О. [[1]], с. 25-27: useState для обраного пресету (null = нічого не обрано)
+  // useState (с. 25-27 [[1]]): обраний пресет (null = нічого не обрано)
   const [selectedPreset, setSelectedPreset] = useState<PresetId | null>(null);
 
   // Render prop для вмісту вкладок бічної панелі
   const renderSidebarTab = (id: SidebarTabId) => {
     if (id === 'presets') {
       return (
-        // Яскевич В. О. [[1]], с. 21-22: список з унікальним key={preset.id}
+        // Список із унікальним key={preset.id} (с. 21-22 [[1]])
         <ul className="space-y-2">
           {PRESET_CATALOG.map((preset) => {
             const isSelected = preset.id === selectedPreset;
@@ -68,9 +76,10 @@ function App() {
     <WorkspaceLayout
       title="Симуляція фізичних процесів"
       status={status}
+      // Слот профілю: HeaderSessionBar сам бере дані з контексту, пропси не потрібні
+      profileSlot={<HeaderSessionBar />}
       renderSidebarTab={renderSidebarTab}
       canvasSlot={
-        // Тернарний оператор: підказка до вибору пресету або назва обраного
         selectedPreset === null ? undefined : (
           <Card className="border-dashed">
             <p className="text-sm">
@@ -83,6 +92,25 @@ function App() {
         )
       }
     />
+  );
+}
+
+/** Вибір екрана за станом сесії (умовний рендеринг, с. 19-20 [[1]]). */
+function AppContent() {
+  const { profile } = useSession();
+  return profile === null ? <QuickStartAuth /> : <WorkspaceScreen />;
+}
+
+export interface AppProps {
+  /** Початковий профіль для тестів: null = гість, undefined = прочитати localStorage. */
+  initialProfile?: ResearcherProfile | null;
+}
+
+function App({ initialProfile }: AppProps) {
+  return (
+    <SessionProvider initialProfile={initialProfile}>
+      <AppContent />
+    </SessionProvider>
   );
 }
 

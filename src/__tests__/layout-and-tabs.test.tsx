@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import App from '../App';
+import { TEST_PROFILE } from './testProfile';
 import { Card } from '../components/Card';
 import { Tabs } from '../components/Tabs';
 import { WorkspaceLayout } from '../components/WorkspaceLayout';
@@ -133,13 +134,13 @@ describe('Card (children + умовний рендеринг)', () => {
 
 describe('Інтеграція App', () => {
   it('дозволяє обрати пресет у вкладці "Пресети"', () => {
-    render(<App />);
+    render(<App initialProfile={TEST_PROFILE} />);
     fireEvent.click(screen.getByRole('button', { name: /гармонічний маятник/i }));
     expect(screen.getByTestId('selected-preset')).toHaveTextContent('Гармонічний маятник');
   });
 
   it('показує заглушку у вкладці "Параметри"', () => {
-    render(<App />);
+    render(<App initialProfile={TEST_PROFILE} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Параметри' }));
     expect(screen.getByText(/Issue #7/)).toBeInTheDocument();
   });

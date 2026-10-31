@@ -2,22 +2,23 @@ import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import App from '../App';
 import { PRESET_CATALOG } from '../utils/presetCatalog';
+import { TEST_PROFILE } from './testProfile';
 
 describe('Smoke-тест каркаса застосунку', () => {
   it('відображає заголовок проєкту', () => {
-    render(<App />);
+    render(<App initialProfile={TEST_PROFILE} />);
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(
       /симуляція фізичних процесів/i,
     );
   });
 
   it('показує початковий статус IDLE', () => {
-    render(<App />);
+    render(<App initialProfile={TEST_PROFILE} />);
     expect(screen.getByTestId('simulation-status')).toHaveTextContent('IDLE');
   });
 
   it('виводить рівно 3 пресети з унікальними id', () => {
-    render(<App />);
+    render(<App initialProfile={TEST_PROFILE} />);
     // Пресети відображаються як кнопки aria-pressed у вкладці "Пресети"
     expect(screen.getAllByRole('button', { pressed: false })).toHaveLength(3);
 
