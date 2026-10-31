@@ -1,26 +1,35 @@
-import { useState } from 'react';
-import type { SimulationStatus, PresetId, ResearcherProfile } from './types/simulation';
+import { useReducer } from 'react';
+import type { ResearcherProfile } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
 import { Card } from './components/Card';
+import { ErrorBanner } from './components/ErrorBanner';
 import { HeaderSessionBar } from './components/HeaderSessionBar';
 import { QuickStartAuth } from './components/QuickStartAuth';
 import { WorkspaceLayout } from './components/WorkspaceLayout';
 import type { SidebarTabId } from './components/WorkspaceLayout';
 import { SessionProvider, useSession } from './context/SessionContext';
-
-// Початковий стан контролера; у Issue #4 перейде під керування useReducer
-const INITIAL_STATUS: SimulationStatus = 'IDLE';
+import {
+  actionCreators,
+  initialSimulationState,
+  simulationReducer,
+} from './reducers/simulationReducer';
 
 /**
  * Робоча область для авторизованого дослідника.
- * Окремий компонент: при виході він розмонтовується, і локальний стан
- * (обраний пресет) не «просочується» до наступного користувача.
+ * Окремий компонент: при виході він розмонтовується, і стан симуляції
+ * не «просочується» до наступного користувача.
  */
 function WorkspaceScreen() {
-  const status: SimulationStatus = INITIAL_STATUS;
+  // useReducer (с. 28, 31 [[1]]): стан автомата змінюється лише через dispatch(дія)
+  const [simState, dispatch] = useReducer(simulationReducer, initialSimulationState);
+  const { status, selectedPreset, errorMessage, validationErrors } = simState;
 
-  // useState (с. 25-27 [[1]]): обраний пресет (null = нічого не обрано)
-  const [selectedPreset, setSelectedPreset] = useState<PresetId | null>(null);
+  const isPaused = status === 'PAUSED';
+  const selectedMeta = PRESET_CATALOG.find((preset) => preset.id === selectedPreset);
+
+  // Кнопка "Старт" у стані PAUSED працює як "Продовжити"
+  const handleStartOrResume = () =>
+    dispatch(isPaused ? actionCreators.resume() : actionCreators.start());
 
   // Render prop для вмісту вкладок бічної панелі
   const renderSidebarTab = (id: SidebarTabId) => {
@@ -35,7 +44,7 @@ function WorkspaceScreen() {
                 <button
                   type="button"
                   aria-pressed={isSelected}
-                  onClick={() => setSelectedPreset(preset.id)}
+                  onClick={() => dispatch(actionCreators.selectPreset(preset.id))}
                   className={`w-full rounded-lg border p-3 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-600 ${
                     isSelected
                       ? 'border-sky-600 bg-sky-50 dark:bg-sky-950'
@@ -72,24 +81,45 @@ function WorkspaceScreen() {
     );
   };
 
+  // Слот полотна потрібен, якщо є що показати: помилка або обраний пресет
+  const hasCanvasContent = status === 'ERROR' || selectedMeta !== undefined;
+
   return (
     <WorkspaceLayout
       title="Симуляція фізичних процесів"
       status={status}
-      // Слот профілю: HeaderSessionBar сам бере дані з контексту, пропси не потрібні
       profileSlot={<HeaderSessionBar />}
       renderSidebarTab={renderSidebarTab}
+      // Доступність кнопок виводиться зі стану автомата
+      canStart={status === 'READY' || status === 'PAUSED'}
+      canPause={status === 'RUNNING'}
+      canReset={status !== 'IDLE'}
+      startLabel={isPaused ? 'Продовжити' : 'Старт'}
+      onStartOrResume={handleStartOrResume}
+      onPause={() => dispatch(actionCreators.pause())}
+      onReset={() => dispatch(actionCreators.reset())}
       canvasSlot={
-        selectedPreset === null ? undefined : (
-          <Card className="border-dashed">
-            <p className="text-sm">
-              Обрано пресет:{' '}
-              <strong data-testid="selected-preset">
-                {PRESET_CATALOG.find((p) => p.id === selectedPreset)?.title}
-              </strong>
-            </p>
-          </Card>
-        )
+        hasCanvasContent ? (
+          <div className="space-y-3">
+            {/* с. 18-19 [[1]]: блок помилки лише у стані ERROR */}
+            {status === 'ERROR' && errorMessage !== null && (
+              <ErrorBanner
+                message={errorMessage}
+                details={Object.values(validationErrors).filter(
+                  (message): message is string => typeof message === 'string',
+                )}
+              />
+            )}
+            {selectedMeta !== undefined && (
+              <Card className="border-dashed">
+                <p className="text-sm">
+                  Обрано пресет:{' '}
+                  <strong data-testid="selected-preset">{selectedMeta.title}</strong>
+                </p>
+              </Card>
+            )}
+          </div>
+        ) : undefined
       }
     />
   );
