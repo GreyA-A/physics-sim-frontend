@@ -1,10 +1,11 @@
-import { useReducer } from 'react';
-import type { ResearcherProfile } from './types/simulation';
+import { useCallback, useReducer, useState } from 'react';
+import type { ResearcherProfile, TelemetrySnapshot } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
-import { Card } from './components/Card';
 import { ErrorBanner } from './components/ErrorBanner';
 import { HeaderSessionBar } from './components/HeaderSessionBar';
+import { LiveTelemetry } from './components/LiveTelemetry';
 import { QuickStartAuth } from './components/QuickStartAuth';
+import { SimulationCanvas } from './components/SimulationCanvas';
 import { WorkspaceLayout } from './components/WorkspaceLayout';
 import type { SidebarTabId } from './components/WorkspaceLayout';
 import { SessionProvider, useSession } from './context/SessionContext';
@@ -24,12 +25,32 @@ function WorkspaceScreen() {
   const [simState, dispatch] = useReducer(simulationReducer, initialSimulationState);
   const { status, selectedPreset, errorMessage, validationErrors } = simState;
 
+  // Тема з контексту (useContext, с. 41-44 [[1]])
+  const { theme } = useSession();
+
+  // Лічильник скидань: зміна значення змушує SimulationCanvas перестворити сцену
+  const [resetVersion, setResetVersion] = useState(0);
+  // Останній знімок телеметрії від Canvas
+  const [telemetry, setTelemetry] = useState<TelemetrySnapshot | null>(null);
+
+  const handleTelemetry = useCallback((snapshot: TelemetrySnapshot) => setTelemetry(snapshot), []);
+  // Інтегратор розійшовся -> автомат у ERROR (dispatch стабільний, у залежності не потрібен)
+  const handleDiverged = useCallback(
+    (message: string) => dispatch(actionCreators.setError(message)),
+    [],
+  );
+
   const isPaused = status === 'PAUSED';
   const selectedMeta = PRESET_CATALOG.find((preset) => preset.id === selectedPreset);
 
   // Кнопка "Старт" у стані PAUSED працює як "Продовжити"
   const handleStartOrResume = () =>
     dispatch(isPaused ? actionCreators.resume() : actionCreators.start());
+
+  const handleReset = () => {
+    dispatch(actionCreators.reset());
+    setResetVersion((version) => version + 1);
+  };
 
   // Render prop для вмісту вкладок бічної панелі
   const renderSidebarTab = (id: SidebarTabId) => {
@@ -97,7 +118,7 @@ function WorkspaceScreen() {
       startLabel={isPaused ? 'Продовжити' : 'Старт'}
       onStartOrResume={handleStartOrResume}
       onPause={() => dispatch(actionCreators.pause())}
-      onReset={() => dispatch(actionCreators.reset())}
+      onReset={handleReset}
       canvasSlot={
         hasCanvasContent ? (
           <div className="space-y-3">
@@ -110,15 +131,30 @@ function WorkspaceScreen() {
                 )}
               />
             )}
-            {selectedMeta !== undefined && (
-              <Card className="border-dashed">
+            {selectedMeta !== undefined && selectedPreset !== null && (
+              <>
                 <p className="text-sm">
                   Обрано пресет:{' '}
                   <strong data-testid="selected-preset">{selectedMeta.title}</strong>
                 </p>
-              </Card>
+                <SimulationCanvas
+                  presetId={selectedPreset}
+                  params={simState.params}
+                  status={status}
+                  theme={theme}
+                  resetVersion={resetVersion}
+                  onTelemetryUpdate={handleTelemetry}
+                  onSimulationDiverged={handleDiverged}
+                />
+              </>
             )}
           </div>
+        ) : undefined
+      }
+      // Живі значення лише коли пресет обрано; інакше показується типова заглушка Layout
+      telemetrySlot={
+        selectedPreset !== null ? (
+          <LiveTelemetry telemetry={telemetry} isRunning={status === 'RUNNING'} />
         ) : undefined
       }
     />

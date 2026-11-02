@@ -33,7 +33,7 @@ export const PARAM_BOUNDS: Record<ParamKey, ParamBound> = {
   restitutionWall: { min: 0, max: 1, label: 'Коефіцієнт відновлення стін', unit: '' },
   launchAngleDeg: { min: 0, max: 90, label: 'Кут пострілу', unit: '°' },
   initialSpeed: { min: 0.1, max: 100, label: 'Початкова швидкість', unit: 'м/с' },
-  pendulumLength: { min: 0.2, max: 20, label: 'Довжина підвісу', unit: 'м' },
+  pendulumLength: { min: 0.2, max: 9.5, label: 'Довжина підвісу', unit: 'м' },
   initialAngleDeg: { min: -85, max: 85, label: 'Початковий кут відхилення', unit: '°' },
 };
 
