@@ -2,9 +2,10 @@ import { useCallback, useReducer, useState } from 'react';
 import type { ResearcherProfile, TelemetrySnapshot } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
 import { DEFAULT_SIMULATION_PARAMS } from './utils/paramValidator';
+import { appendTelemetry } from './utils/telemetryStats';
 import { ErrorBanner } from './components/ErrorBanner';
 import { HeaderSessionBar } from './components/HeaderSessionBar';
-import { LiveTelemetry } from './components/LiveTelemetry';
+import { TelemetryPanel } from './components/TelemetryPanel';
 import { ParameterPanel } from './components/ParameterPanel';
 import { QuickStartAuth } from './components/QuickStartAuth';
 import { SimulationCanvas } from './components/SimulationCanvas';
@@ -35,11 +36,20 @@ function WorkspaceScreen() {
   // Лічильник скидань: змушує Canvas перестворити сцену, а панель параметрів
   // (через key) заново прочитати params у чернетку
   const [resetVersion, setResetVersion] = useState(0);
-  const [telemetry, setTelemetry] = useState<TelemetrySnapshot | null>(null);
+  // useState з масивом (с. 26-27 [[1]]): журнал знімків (кільцевий буфер до 40 записів)
+  const [telemetryLog, setTelemetryLog] = useState<TelemetrySnapshot[]>([]);
 
   // useCallback (с. 36-37 [[1]]): стабільні посилання на колбеки, що йдуть у
   // мемоізовані дочірні компоненти. dispatch і set-функції стабільні за гарантією React.
-  const handleTelemetry = useCallback((snapshot: TelemetrySnapshot) => setTelemetry(snapshot), []);
+  // Функціональне оновлення (prev => ...) і НОВИЙ масив [...prev, snapshot] з обрізанням
+  // до останніх 40 записів (див. appendTelemetry). Мутація через push залишила б те саме
+  // посилання, useState порівняв би його через === і пропустив би рендеринг (с. 26-27 [[1]]).
+  const handleTelemetry = useCallback(
+    (snapshot: TelemetrySnapshot) => setTelemetryLog((prev) => appendTelemetry(prev, snapshot)),
+    [],
+  );
+
+  const handleClearLog = useCallback(() => setTelemetryLog([]), []);
 
   const handleDiverged = useCallback(
     (message: string) => dispatch(actionCreators.setError(message)),
@@ -56,6 +66,8 @@ function WorkspaceScreen() {
   const handleReset = useCallback(() => {
     dispatch(actionCreators.reset());
     setResetVersion((version) => version + 1);
+    // Журнал очищується; Canvas одразу додасть стартовий запис із time = 0
+    setTelemetryLog([]);
   }, []);
 
   const handleUpdateParams = useCallback(
@@ -201,11 +213,14 @@ function WorkspaceScreen() {
           </div>
         ) : undefined
       }
-      // Живі значення лише коли пресет обрано; інакше показується типова заглушка Layout
+      // Панель телеметрії завжди в слоті: порожній стан обробляє сам компонент
       telemetrySlot={
-        selectedPreset !== null ? (
-          <LiveTelemetry telemetry={telemetry} isRunning={status === 'RUNNING'} />
-        ) : undefined
+        <TelemetryPanel
+          log={telemetryLog}
+          status={status}
+          hasPreset={selectedPreset !== null}
+          onClearLog={handleClearLog}
+        />
       }
     />
   );
