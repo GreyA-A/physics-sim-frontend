@@ -170,7 +170,7 @@ export function WorkspaceLayout({
                   backgroundSize: '24px 24px',
                 }}
               >
-                Тут буде HTML5 Canvas (Issue #6)
+                Оберіть пресет у вкладці «Пресети», щоб побачити симуляцію
               </div>
             )}
           </Card>
