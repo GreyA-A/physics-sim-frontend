@@ -1,19 +1,23 @@
 import { useCallback, useReducer, useState } from 'react';
 import type { ResearcherProfile, TelemetrySnapshot } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
+import { DEFAULT_SIMULATION_PARAMS } from './utils/paramValidator';
 import { ErrorBanner } from './components/ErrorBanner';
 import { HeaderSessionBar } from './components/HeaderSessionBar';
 import { LiveTelemetry } from './components/LiveTelemetry';
+import { ParameterPanel } from './components/ParameterPanel';
 import { QuickStartAuth } from './components/QuickStartAuth';
 import { SimulationCanvas } from './components/SimulationCanvas';
 import { WorkspaceLayout } from './components/WorkspaceLayout';
 import type { SidebarTabId } from './components/WorkspaceLayout';
 import { SessionProvider, useSession } from './context/SessionContext';
+import { useWorkspaceHotkeys } from './hooks/useWorkspaceHotkeys';
 import {
   actionCreators,
   initialSimulationState,
   simulationReducer,
 } from './reducers/simulationReducer';
+import type { ParamPatch } from './reducers/simulationReducer';
 
 /**
  * Робоча область для авторизованого дослідника.
@@ -23,34 +27,57 @@ import {
 function WorkspaceScreen() {
   // useReducer (с. 28, 31 [[1]]): стан автомата змінюється лише через dispatch(дія)
   const [simState, dispatch] = useReducer(simulationReducer, initialSimulationState);
-  const { status, selectedPreset, errorMessage, validationErrors } = simState;
+  const { status, selectedPreset, errorMessage, validationErrors, params } = simState;
 
   // Тема з контексту (useContext, с. 41-44 [[1]])
   const { theme } = useSession();
 
-  // Лічильник скидань: зміна значення змушує SimulationCanvas перестворити сцену
+  // Лічильник скидань: змушує Canvas перестворити сцену, а панель параметрів
+  // (через key) заново прочитати params у чернетку
   const [resetVersion, setResetVersion] = useState(0);
-  // Останній знімок телеметрії від Canvas
   const [telemetry, setTelemetry] = useState<TelemetrySnapshot | null>(null);
 
+  // useCallback (с. 36-37 [[1]]): стабільні посилання на колбеки, що йдуть у
+  // мемоізовані дочірні компоненти. dispatch і set-функції стабільні за гарантією React.
   const handleTelemetry = useCallback((snapshot: TelemetrySnapshot) => setTelemetry(snapshot), []);
-  // Інтегратор розійшовся -> автомат у ERROR (dispatch стабільний, у залежності не потрібен)
+
   const handleDiverged = useCallback(
     (message: string) => dispatch(actionCreators.setError(message)),
     [],
   );
 
-  const isPaused = status === 'PAUSED';
-  const selectedMeta = PRESET_CATALOG.find((preset) => preset.id === selectedPreset);
+  // Кнопка "Старт" у стані PAUSED працює як "Продовжити": колбек залежить від status
+  const handleStartOrResume = useCallback(() => {
+    dispatch(status === 'PAUSED' ? actionCreators.resume() : actionCreators.start());
+  }, [status]);
 
-  // Кнопка "Старт" у стані PAUSED працює як "Продовжити"
-  const handleStartOrResume = () =>
-    dispatch(isPaused ? actionCreators.resume() : actionCreators.start());
+  const handlePause = useCallback(() => dispatch(actionCreators.pause()), []);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     dispatch(actionCreators.reset());
     setResetVersion((version) => version + 1);
-  };
+  }, []);
+
+  const handleUpdateParams = useCallback(
+    (patch: ParamPatch) => dispatch(actionCreators.updateParams(patch)),
+    [],
+  );
+
+  const handleRestoreDefaults = useCallback(() => {
+    dispatch(actionCreators.updateParams({ ...DEFAULT_SIMULATION_PARAMS }));
+    setResetVersion((version) => version + 1);
+  }, []);
+
+  // Глобальні гарячі клавіші: Space, R
+  useWorkspaceHotkeys({
+    status,
+    onStartOrResume: handleStartOrResume,
+    onPause: handlePause,
+    onReset: handleReset,
+  });
+
+  const isPaused = status === 'PAUSED';
+  const selectedMeta = PRESET_CATALOG.find((preset) => preset.id === selectedPreset);
 
   // Render prop для вмісту вкладок бічної панелі
   const renderSidebarTab = (id: SidebarTabId) => {
@@ -87,14 +114,22 @@ function WorkspaceScreen() {
       );
     }
 
-    // Заглушки для наступних Issues
     if (id === 'params') {
       return (
-        <p className="text-sm text-slate-600 dark:text-slate-300">
-          Панель параметрів з'явиться в Issue #7.
-        </p>
+        <ParameterPanel
+          // key: після скидання, відновлення типових значень або зміни пресету
+          // панель перемонтується й чернетка знову збігається з params
+          key={`${selectedPreset ?? 'none'}-${resetVersion}`}
+          params={params}
+          validationErrors={validationErrors}
+          presetId={selectedPreset}
+          onUpdateParams={handleUpdateParams}
+          onRestoreDefaults={handleRestoreDefaults}
+        />
       );
     }
+
+    // Заглушка для Issue #9
     return (
       <p className="text-sm text-slate-600 dark:text-slate-300">
         Експорт JSON, CSV та PNG з'явиться в Issue #9.
@@ -117,7 +152,7 @@ function WorkspaceScreen() {
       canReset={status !== 'IDLE'}
       startLabel={isPaused ? 'Продовжити' : 'Старт'}
       onStartOrResume={handleStartOrResume}
-      onPause={() => dispatch(actionCreators.pause())}
+      onPause={handlePause}
       onReset={handleReset}
       canvasSlot={
         hasCanvasContent ? (
@@ -139,13 +174,28 @@ function WorkspaceScreen() {
                 </p>
                 <SimulationCanvas
                   presetId={selectedPreset}
-                  params={simState.params}
+                  params={params}
                   status={status}
                   theme={theme}
                   resetVersion={resetVersion}
                   onTelemetryUpdate={handleTelemetry}
                   onSimulationDiverged={handleDiverged}
                 />
+                {/* Підказка про гарячі клавіші (UX) */}
+                <p
+                  data-testid="hotkeys-hint"
+                  className="text-xs text-slate-500 dark:text-slate-400"
+                >
+                  Гарячі клавіші:{' '}
+                  <kbd className="rounded border border-slate-300 px-1 font-mono dark:border-slate-600">
+                    Space
+                  </kbd>{' '}
+                  - старт / пауза,{' '}
+                  <kbd className="rounded border border-slate-300 px-1 font-mono dark:border-slate-600">
+                    R
+                  </kbd>{' '}
+                  - скидання (не працюють під час вводу в полі).
+                </p>
               </>
             )}
           </div>

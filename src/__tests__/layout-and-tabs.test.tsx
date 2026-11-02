@@ -139,9 +139,9 @@ describe('Інтеграція App', () => {
     expect(screen.getByTestId('selected-preset')).toHaveTextContent('Гармонічний маятник');
   });
 
-  it('показує заглушку у вкладці "Параметри"', () => {
+  it('показує панель параметрів у вкладці "Параметри"', () => {
     render(<App initialProfile={TEST_PROFILE} />);
     fireEvent.click(screen.getByRole('tab', { name: 'Параметри' }));
-    expect(screen.getByText(/Issue #7/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Прискорення вільного падіння/i)).toBeInTheDocument();
   });
 });
