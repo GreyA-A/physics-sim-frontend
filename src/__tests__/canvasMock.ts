@@ -55,12 +55,38 @@ export function getMockContext(canvas: HTMLCanvasElement): MockContext2D {
   return context;
 }
 
+// ---------------------------------------------------------------------------
+// Стаби для експорту файлів (Issue #9)
+// ---------------------------------------------------------------------------
+
+/** Записи про «завантаження»: ім'я файлу та href посилання, по якому клікнули. */
+const downloads: { filename: string; href: string }[] = [];
+
+/**
+ * jsdom не вміє навігацію для <a download> і не має URL.createObjectURL / toBlob.
+ * exportMocks дозволяє тестам перевірити, що саме було «завантажено».
+ */
+export const exportMocks = {
+  createObjectURL: vi.fn<(blob: Blob) => string>(() => 'blob:mock-url'),
+  revokeObjectURL: vi.fn<(url: string) => void>(),
+  toBlob: vi.fn((callback: BlobCallback, type?: string) => {
+    callback(new Blob(['png-bytes'], { type: type ?? 'image/png' }));
+  }),
+  toDataURL: vi.fn(() => 'data:image/png;base64,iVBORw0KGgo='),
+  anchorClick: vi.fn(function (this: HTMLAnchorElement) {
+    downloads.push({ filename: this.download, href: this.href });
+  }),
+  downloads,
+};
+
 /**
  * Встановлює безпечне тестове середовище:
  *  - getContext('2d') повертає мок;
  *  - requestAnimationFrame / cancelAnimationFrame нічого не запускають
  *    (цикл кадрів у тестах не стартує, поки тест сам не підмінить їх);
- *  - ResizeObserver - порожня заглушка.
+ *  - ResizeObserver - порожня заглушка;
+ *  - URL.createObjectURL / revokeObjectURL, canvas.toBlob / toDataURL та клік
+ *    по <a> замінено стабами; лічильники exportMocks скидаються.
  * Викликається з test-setup.ts та повторно після тестів, що підміняють ці API.
  */
 export function installCanvasTestEnvironment(): void {
@@ -79,4 +105,26 @@ export function installCanvasTestEnvironment(): void {
       disconnect(): void {}
     },
   );
+
+  exportMocks.createObjectURL.mockClear();
+  exportMocks.revokeObjectURL.mockClear();
+  exportMocks.toBlob.mockClear();
+  exportMocks.toDataURL.mockClear();
+  exportMocks.anchorClick.mockClear();
+  downloads.length = 0;
+
+  Object.defineProperty(URL, 'createObjectURL', {
+    configurable: true,
+    writable: true,
+    value: exportMocks.createObjectURL,
+  });
+  Object.defineProperty(URL, 'revokeObjectURL', {
+    configurable: true,
+    writable: true,
+    value: exportMocks.revokeObjectURL,
+  });
+  HTMLCanvasElement.prototype.toBlob = exportMocks.toBlob as unknown as HTMLCanvasElement['toBlob'];
+  HTMLCanvasElement.prototype.toDataURL =
+    exportMocks.toDataURL as unknown as HTMLCanvasElement['toDataURL'];
+  HTMLAnchorElement.prototype.click = exportMocks.anchorClick as unknown as () => void;
 }

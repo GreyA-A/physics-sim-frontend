@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { MutableRefObject } from 'react';
 import { renderWorldToCanvas } from '../engine/canvasRenderer';
 import type { LayerOptions } from '../engine/canvasRenderer';
 import {
@@ -29,6 +30,8 @@ export interface SimulationCanvasProps {
   onTelemetryUpdate?: (snapshot: TelemetrySnapshot) => void;
   /** Викликається, якщо інтегратор «вибухнув» (NaN / Infinity). */
   onSimulationDiverged?: (message: string) => void;
+  /** Ref, у який передається елемент <canvas> (для PNG-експорту в батьківському компоненті). */
+  canvasHandleRef?: MutableRefObject<HTMLCanvasElement | null>;
 }
 
 const FALLBACK_CSS_WIDTH = 800;
@@ -57,6 +60,7 @@ export function SimulationCanvas({
   resetVersion,
   onTelemetryUpdate,
   onSimulationDiverged,
+  canvasHandleRef,
 }: SimulationCanvasProps) {
   // useState (с. 25 [[1]]): видимі шари; зміна має перемалювати інтерфейс перемикачів
   const [options, setOptions] = useState<LayerOptions>({
@@ -101,6 +105,15 @@ export function SimulationCanvas({
     onTelemetryRef.current = onTelemetryUpdate;
     onDivergedRef.current = onSimulationDiverged;
   });
+
+  // Віддаємо елемент <canvas> батьківському компоненту й прибираємо його при розмонтуванні
+  useEffect(() => {
+    if (!canvasHandleRef) return;
+    canvasHandleRef.current = canvasRef.current;
+    return () => {
+      canvasHandleRef.current = null;
+    };
+  }, [canvasHandleRef]);
 
   /** Перемальовує поточний стан світу (якщо він є). */
   const draw = useCallback(() => {

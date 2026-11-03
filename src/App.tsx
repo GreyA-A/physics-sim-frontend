@@ -1,9 +1,10 @@
-import { useCallback, useReducer, useState } from 'react';
-import type { ResearcherProfile, TelemetrySnapshot } from './types/simulation';
+import { useCallback, useReducer, useRef, useState } from 'react';
+import type { PresetId, ResearcherProfile, SimulationParams, TelemetrySnapshot } from './types/simulation';
 import { PRESET_CATALOG } from './utils/presetCatalog';
 import { DEFAULT_SIMULATION_PARAMS } from './utils/paramValidator';
 import { appendTelemetry } from './utils/telemetryStats';
 import { ErrorBanner } from './components/ErrorBanner';
+import { ExportPanel } from './components/ExportPanel';
 import { HeaderSessionBar } from './components/HeaderSessionBar';
 import { TelemetryPanel } from './components/TelemetryPanel';
 import { ParameterPanel } from './components/ParameterPanel';
@@ -50,6 +51,18 @@ function WorkspaceScreen() {
   );
 
   const handleClearLog = useCallback(() => setTelemetryLog([]), []);
+
+  // useRef (с. 38-40 [[1]]): елемент <canvas> для PNG-експорту; зміна не викликає рендеру
+  const canvasHandleRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Імпорт сцени: обираємо пресет, застосовуємо параметри, скидаємо Canvas і журнал.
+  // Стан READY створює світ заново, тому імпортована сцена одразу відображається.
+  const handleImportScene = useCallback((presetId: PresetId, importedParams: SimulationParams) => {
+    dispatch(actionCreators.selectPreset(presetId));
+    dispatch(actionCreators.updateParams({ ...importedParams }));
+    setResetVersion((version) => version + 1);
+    setTelemetryLog([]);
+  }, []);
 
   const handleDiverged = useCallback(
     (message: string) => dispatch(actionCreators.setError(message)),
@@ -141,11 +154,15 @@ function WorkspaceScreen() {
       );
     }
 
-    // Заглушка для Issue #9
+    // Вкладка «Експорт» (Крок 3 User Guide)
     return (
-      <p className="text-sm text-slate-600 dark:text-slate-300">
-        Експорт JSON, CSV та PNG з'явиться в Issue #9.
-      </p>
+      <ExportPanel
+        presetId={selectedPreset}
+        params={params}
+        telemetryLog={telemetryLog}
+        canvasRef={canvasHandleRef}
+        onImportScene={handleImportScene}
+      />
     );
   };
 
@@ -192,6 +209,7 @@ function WorkspaceScreen() {
                   resetVersion={resetVersion}
                   onTelemetryUpdate={handleTelemetry}
                   onSimulationDiverged={handleDiverged}
+                  canvasHandleRef={canvasHandleRef}
                 />
                 {/* Підказка про гарячі клавіші (UX) */}
                 <p
